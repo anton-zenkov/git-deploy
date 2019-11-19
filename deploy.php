@@ -1,11 +1,15 @@
 <?php
+//https://github.com/vicenteguerra/git-deploy
+
+$conf = require 'config.php';
+
 $content = file_get_contents("php://input");
 $json    = json_decode($content, true);
-$file    = fopen(LOGFILE, "a");
+$file    = fopen($conf['LOGFILE'], "a");
 $time    = time();
 $token   = false;
 $sha     = false;
-$DIR     = preg_match("/\/$/", DIR) ? DIR : DIR . "/";
+$DIR     = dirname(__DIR__) . '/';
 
 // retrieve the token
 if (!$token && isset($_SERVER["HTTP_X_HUB_SIGNATURE"])) {
@@ -26,16 +30,11 @@ if (isset($json["checkout_sha"])) {
 }
 
 // write the time to the log
-date_default_timezone_set("UTC");
+date_default_timezone_set("Europe/Moscow");
 fputs($file, date("d-m-Y (H:i:s)", $time) . "\n");
 
 // specify that the response does not contain HTML
 header("Content-Type: text/plain");
-
-// use user-defined max_execution_time
-if (!empty(MAX_EXECUTION_TIME)) {
-    ini_set("max_execution_time", MAX_EXECUTION_TIME);
-}
 
 // function to forbid access
 function forbid($file, $reason) {
@@ -46,7 +45,7 @@ function forbid($file, $reason) {
     http_response_code(403);
 
     // write the error to the log and the body
-    fputs($file, $error . "\n\n");
+    fputs($file, $error . "\n");
     echo $error;
 
     // close the log
@@ -57,21 +56,21 @@ function forbid($file, $reason) {
 }
 
 // Check for a GitHub signature
-if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_hmac($algo, $content, TOKEN)) {
+if (!empty($conf['TOKEN']) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_hmac($algo, $content, $conf['TOKEN'])) {
     forbid($file, "X-Hub-Signature does not match TOKEN");
 // Check for a GitLab token
-} elseif (!empty(TOKEN) && isset($_SERVER["HTTP_X_GITLAB_TOKEN"]) && $token !== TOKEN) {
+} elseif (!empty($conf['TOKEN']) && isset($_SERVER["HTTP_X_GITLAB_TOKEN"]) && $token !== $conf['TOKEN']) {
     forbid($file, "X-GitLab-Token does not match TOKEN");
 // Check for a $_GET token
-} elseif (!empty(TOKEN) && isset($_GET["token"]) && $token !== TOKEN) {
+} elseif (!empty($conf['TOKEN']) && isset($_GET["token"]) && $token !== $conf['TOKEN']) {
     forbid($file, "\$_GET[\"token\"] does not match TOKEN");
 // if none of the above match, but a token exists, exit
-} elseif (!empty(TOKEN) && !isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && !isset($_SERVER["HTTP_X_GITLAB_TOKEN"]) && !isset($_GET["token"])) {
+} elseif (!empty($conf['TOKEN']) && !isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && !isset($_SERVER["HTTP_X_GITLAB_TOKEN"]) && !isset($_GET["token"])) {
     forbid($file, "No token detected");
 } else {
     // check if pushed branch matches branch specified in config
-    if ($json["ref"] === BRANCH) {
-        fputs($file, $content . PHP_EOL);
+    if ($json["ref"] === $conf['BRANCH']) {
+        //fputs($file, $content . "\n");
 
         // ensure directory is a repository
         if (file_exists($DIR . ".git") && is_dir($DIR)) {
@@ -84,11 +83,11 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
             /**
              * Attempt to reset specific hash if specified
              */
-            if (!empty($_GET["reset"]) && $_GET["reset"] === "true") {
+            if ((!empty($_GET["reset"]) && $_GET["reset"] === "true") || (!empty($conf['RESET']) && $conf['RESET'] === true)) {
                 // write to the log
                 fputs($file, "*** RESET TO HEAD INITIATED ***" . "\n");
 
-                exec(GIT . " reset --hard HEAD 2>&1", $output, $exit);
+                exec("git reset --hard HEAD 2>&1", $output, $exit);
 
                 // reformat the output as a string
                 $output = (!empty($output) ? implode("\n", $output) : "[no output]") . "\n";
@@ -96,7 +95,7 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
                 // if an error occurred, return 500 and log the error
                 if ($exit !== 0) {
                     http_response_code(500);
-                    $output = "=== ERROR: Reset to head failed using GIT `" . GIT . "` ===\n" . $output;
+                    $output = "=== ERROR: Reset to head failed using GIT `git` ===\n" . $output;
                 }
 
                 // write the output to the log and the body
@@ -107,12 +106,12 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
             /**
              * Attempt to execute BEFORE_PULL if specified
              */
-            if (!empty(BEFORE_PULL)) {
+            if (!empty($conf['BEFORE_PULL'])) {
                 // write to the log
                 fputs($file, "*** BEFORE_PULL INITIATED ***" . "\n");
 
                 // execute the command, returning the output and exit code
-                exec(BEFORE_PULL . " 2>&1", $output, $exit);
+                exec($conf['BEFORE_PULL'] . " 2>&1", $output, $exit);
 
                 // reformat the output as a string
                 $output = (!empty($output) ? implode("\n", $output) : "[no output]") . "\n";
@@ -120,7 +119,7 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
                 // if an error occurred, return 500 and log the error
                 if ($exit !== 0) {
                     http_response_code(500);
-                    $output = "=== ERROR: BEFORE_PULL `" . BEFORE_PULL . "` failed ===\n" . $output;
+                    $output = "=== ERROR: BEFORE_PULL `" . $conf['BEFORE_PULL'] . "` failed ===\n" . $output;
                 }
 
                 // write the output to the log and the body
@@ -131,7 +130,7 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
             /**
              * Attempt to pull, returing the output and exit code
              */
-            exec(GIT . " pull 2>&1", $output, $exit);
+            exec("git pull " . $conf['REMOTE_REPOSITORY'] . " 2>&1", $output, $exit);
 
             // reformat the output as a string
             $output = (!empty($output) ? implode("\n", $output) : "[no output]") . "\n";
@@ -139,7 +138,7 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
             // if an error occurred, return 500 and log the error
             if ($exit !== 0) {
                 http_response_code(500);
-                $output = "=== ERROR: Pull failed using GIT `" . GIT . "` and DIR `" . DIR . "` ===\n" . $output;
+                $output = "=== ERROR: Pull failed using GIT `git` and DIR `" . $DIR . "` ===\n" . $output;
             }
 
             // write the output to the log and the body
@@ -153,7 +152,7 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
                 // write to the log
                 fputs($file, "*** RESET TO HASH INITIATED ***" . "\n");
 
-                exec(GIT . " reset --hard {$sha} 2>&1", $output, $exit);
+                exec("git reset --hard {$sha} 2>&1", $output, $exit);
 
                 // reformat the output as a string
                 $output = (!empty($output) ? implode("\n", $output) : "[no output]") . "\n";
@@ -161,7 +160,7 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
                 // if an error occurred, return 500 and log the error
                 if ($exit !== 0) {
                     http_response_code(500);
-                    $output = "=== ERROR: Reset failed using GIT `" . GIT . "` and \$sha `" . $sha . "` ===\n" . $output;
+                    $output = "=== ERROR: Reset failed using GIT `git` and \$sha `" . $sha . "` ===\n" . $output;
                 }
 
                 // write the output to the log and the body
@@ -172,12 +171,12 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
             /**
              * Attempt to execute AFTER_PULL if specified
              */
-            if (!empty(AFTER_PULL)) {
+            if (!empty($conf['AFTER_PULL'])) {
                 // write to the log
                 fputs($file, "*** AFTER_PULL INITIATED ***" . "\n");
 
                 // execute the command, returning the output and exit code
-                exec(AFTER_PULL . " 2>&1", $output, $exit);
+                exec($conf['AFTER_PULL'] . " 2>&1", $output, $exit);
 
                 // reformat the output as a string
                 $output = (!empty($output) ? implode("\n", $output) : "[no output]") . "\n";
@@ -185,7 +184,7 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
                 // if an error occurred, return 500 and log the error
                 if ($exit !== 0) {
                     http_response_code(500);
-                    $output = "=== ERROR: AFTER_PULL `" . AFTER_PULL . "` failed ===\n" . $output;
+                    $output = "=== ERROR: AFTER_PULL `" . $conf['AFTER_PULL'] . "` failed ===\n" . $output;
                 }
 
                 // write the output to the log and the body
@@ -197,13 +196,13 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
             fputs($file, "*** AUTO PULL COMPLETE ***" . "\n");
         } else {
             // prepare the generic error
-            $error = "=== ERROR: DIR `" . DIR . "` is not a repository ===\n";
+            $error = "=== ERROR: DIR `" . $DIR . "` is not a repository ===\n";
 
             // try to detemrine the real error
-            if (!file_exists(DIR)) {
-                $error = "=== ERROR: DIR `" . DIR . "` does not exist ===\n";
-            } elseif (!is_dir(DIR)) {
-                $error = "=== ERROR: DIR `" . DIR . "` is not a directory ===\n";
+            if (!file_exists($DIR)) {
+                $error = "=== ERROR: DIR `" . $DIR . "` does not exist ===\n";
+            } elseif (!is_dir($DIR)) {
+                $error = "=== ERROR: DIR `" . $DIR . "` is not a directory ===\n";
             }
 
             // bad request
@@ -214,7 +213,7 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
             echo $error;
         }
     } else{
-        $error = "=== ERROR: Pushed branch `" . $json["ref"] . "` does not match BRANCH `" . BRANCH . "` ===\n";
+        $error = "=== ERROR: Pushed branch `" . $json["ref"] . "` does not match BRANCH `" . $conf['BRANCH'] . "` ===\n";
 
         // bad request
         http_response_code(400);
@@ -226,5 +225,5 @@ if (!empty(TOKEN) && isset($_SERVER["HTTP_X_HUB_SIGNATURE"]) && $token !== hash_
 }
 
 // close the log
-fputs($file, "\n\n" . PHP_EOL);
+fputs($file, "\n");
 fclose($file);
