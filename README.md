@@ -23,15 +23,27 @@ Copy the __git-deploy__ folder and its contents in to your public folder (typica
 Rename __git-deploy/deploy.sample.php__ to __git-deploy/deploy.php__, and update each variable to a value that suits your needs. Multiple copies of __git-deploy/deploy.sample.php__ can be made for multiple projects or versions (you just need to change the webhook url to match the new name). An example of a live configuration is below.
 
 ```PHP
-define("TOKEN", "secret-token");
-define("REMOTE_REPOSITORY", "git@github.com:username/custom-project.git");
-define("DIR", "/var/www/vhosts/repositories/custom-project");
-define("BRANCH", "refs/heads/master");
-define("LOGFILE", "deploy.log");
-define("GIT", "/usr/bin/git");
-define("MAX_EXECUTION_TIME", 180);
-define("BEFORE_PULL", "/usr/bin/git reset --hard @{u}");
-define("AFTER_PULL", "/usr/bin/node ./node_modules/gulp/bin/gulp.js default");
+	// The secret token to add as a GitHub or GitLab secret, or otherwise as https://www.example.com/?token=secret-token
+	'TOKEN' => 'myscret',
+	
+	// The URL to your repository
+	'REMOTE_REPOSITORY' => 'https://github.com/user/repo.git',
+
+	// The branch route
+	'BRANCH' => 'refs/heads/master',
+
+	// The name of the file you want to log to.
+	'LOGFILE' => 'deploy.log',
+	
+	//do git reset --hard HEAD
+	'RESET' => true,
+
+	// A command to execute before pulling
+	'BEFORE_PULL' => '',
+
+	// A command to execute after successfully pulling
+	'AFTER_PULL' => '',
+
 ```
 ### Permissions
 
