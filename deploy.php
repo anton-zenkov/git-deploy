@@ -9,7 +9,7 @@ $file    = fopen($conf['LOGFILE'], "a");
 $time    = time();
 $token   = false;
 $sha     = false;
-$DIR     = dirname(__DIR__) . '/';
+$DIR     = ($conf['LOCAL_REPOSITORY'] ?? dirname(__DIR__)) . '/';
 
 // retrieve the token
 if (!$token && isset($_SERVER["HTTP_X_HUB_SIGNATURE"])) {

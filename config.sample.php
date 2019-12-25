@@ -7,6 +7,9 @@ return array(
 	
 	// The URL to your repository
 	'REMOTE_REPOSITORY' => 'https://github.com/user/repo.git',
+	
+	// The PATH to local repository
+	//'LOCAL_REPOSITORY' => '',
 
 	// The branch route
 	'BRANCH' => 'refs/heads/master',
